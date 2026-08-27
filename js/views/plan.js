@@ -308,6 +308,10 @@ function renderSettings(s, c) {
   return `<div class="stack">${profile}${assumptions}${data}${about}</div>`;
 }
 
+/* Embedded in a frame, the host usually blocks file downloads and pickers, so
+   copy and paste is the only backup route that actually works there. */
+const canSaveFiles = () => { try { return window.top === window.self; } catch { return false; } };
+
 /* Sheet buttons live outside #view, so they are wired once at the document level. */
 let sheetWired = false;
 function wireSheetActions() {
@@ -394,14 +398,14 @@ export function mount(el, s, c, rerender) {
       <div class="tiny" style="margin-bottom:10px">Copy this somewhere safe — a note to yourself, an email, anywhere. Pasting it back into Restore rebuilds every number exactly as it is right now.</div>
       <textarea id="backup-json" readonly rows="9" style="font-family:var(--mono);font-size:11px;line-height:1.4">${esc(json)}</textarea>
       <div class="btn-row"><button class="btn primary wide" data-copy-backup>Copy to clipboard</button></div>
-      <div class="btn-row"><button class="btn wide" data-download-backup>Save as a file</button></div>`);
+      ${canSaveFiles() ? '<div class="btn-row"><button class="btn wide" data-download-backup>Save as a file</button></div>' : ''}`);
   });
   el.querySelector('[data-import]')?.addEventListener('click', () => {
     openSheet('Restore', `
       <div class="tiny" style="margin-bottom:10px">Paste a backup below and hit Restore. This replaces everything currently in the app.</div>
       <textarea id="restore-json" rows="9" placeholder="Paste your backup here" style="font-family:var(--mono);font-size:11px;line-height:1.4"></textarea>
       <div class="btn-row"><button class="btn primary wide" data-do-restore>Restore</button></div>
-      <div class="btn-row"><button class="btn wide" data-restore-file>Pick a backup file instead</button></div>`);
+      ${canSaveFiles() ? '<div class="btn-row"><button class="btn wide" data-restore-file>Pick a backup file instead</button></div>' : ''}`);
   });
   el.querySelector('[data-reset]')?.addEventListener('click', () => {
     if (confirm('Reset every number back to the starting plan? This cannot be undone.')) { resetState(); toast('Reset'); }
