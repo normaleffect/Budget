@@ -1,6 +1,8 @@
 import { uid, todayKey, addMonths } from './format.js';
 
-const START = todayKey();
+/* The plan starts the month her new job does, not the month you happen to open
+   the app. Editable under Plan > Settings. */
+const START = '2026-09';
 const nextDec = (() => {
   const now = new Date();
   const y = now.getMonth() > 11 ? now.getFullYear() + 1 : now.getFullYear();
@@ -9,7 +11,7 @@ const nextDec = (() => {
 
 export function makeDefaultState() {
   return {
-    meta: { version: 4, householdName: 'Our Household', createdAt: new Date().toISOString(), startMonth: START, theme: 'auto' },
+    meta: { version: 5, householdName: 'Our Household', createdAt: new Date().toISOString(), startMonth: START, theme: 'auto' },
 
     profile: {
       filingStatus: 'mfj',
@@ -20,6 +22,7 @@ export function makeDefaultState() {
         { id: uid('dep'), name: 'Kid 3', age: 4 }
       ],
       ages: { you: 38, spouse: 38 },
+      priorW2ThisYear: 0,        // W-2 she already earned this calendar year before the new job
       retireAge: 60
     },
 
@@ -101,7 +104,7 @@ export function makeDefaultState() {
 
     /* ---------------- one-off money in / out ---------------- */
     events: [
-      { id: 'refund', name: 'Tax refunds (2023 + 2024)', amount: 10000, month: START, direction: 'in',  note: 'Already filed, on the way' },
+      { id: 'refund', name: 'Tax refunds (2023 + 2024)', amount: 10000, month: START, direction: 'in',  note: 'Already filed, landing in September' },
       { id: 'vac',    name: 'Christmas vacation',        amount: 5000,  month: nextDec, direction: 'out', note: 'Linked to the vacation goal', goalId: 'goal_vac' }
     ],
 
@@ -130,7 +133,7 @@ export function makeDefaultState() {
 
 /* ---------------- store ---------------- */
 const KEY = 'ledger.state.v3';
-const SCHEMA_VERSION = 4;
+const SCHEMA_VERSION = 5;
 
 /* Saved data wins over defaults, so a new seeded number never reaches someone who
    already opened the app. Migrations fill in the gap without touching real edits. */
@@ -140,6 +143,19 @@ const MIGRATIONS = {
     if (home && !home.balance) Object.assign(home, { balance: 550000, purchasePrice: 335000, purchaseYear: 2020, note: 'Lender valuation' });
     const mtg = st.debts.find((d) => d.id === 'mtg');
     if (mtg && !mtg.balance) Object.assign(mtg, { balance: 291000, apr: 2.25, piPayment: 1216, openedNote: 'Locked at 2.25%. Never selling, never prepaying.' });
+  },
+  5: (st) => {
+    /* Everything used to key off the month the app was first opened. Her job
+       starts in September, so the whole plan does too. */
+    const oldStart = st.meta?.startMonth;
+    if (!oldStart || oldStart >= START) return;
+    const shift = (k) => (k && k < START ? START : k);
+    st.meta.startMonth = START;
+    (st.events || []).forEach((e) => { e.month = shift(e.month); });
+    (st.goals || []).forEach((g) => { if (g.deadline) g.deadline = shift(g.deadline); });
+    if (st.ui) st.ui.trackMonth = null;
+    /* spending logged against months before the plan starts is not part of it */
+    for (const k of Object.keys(st.actuals || {})) if (k < START) delete st.actuals[k];
   }
 };
 

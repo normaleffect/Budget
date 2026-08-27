@@ -89,6 +89,16 @@ export function calcTaxes(input, table = TAX) {
   if (agi > poStart) credits = Math.max(0, credits - Math.ceil((agi - poStart) / 1000) * 50);
   const fedIncomeTax = Math.max(0, grossFedTax - credits);
 
+  /* Credits bigger than the tax bill are partly refundable (the additional child
+     tax credit), which is how a low-income year hands money back. */
+  const unusedCredits = Math.max(0, credits - grossFedTax);
+  const earnedIncome = ficaWages + seNet;
+  const refundableCredit = Math.min(
+    unusedCredits,
+    kidsUnder17 * f.refundableCTCPerChild,
+    Math.max(0, (earnedIncome - f.actcEarnedIncomeFloor) * f.actcRate)
+  );
+
   /* ---- Georgia ---- */
   const gaStd = g.standardDeduction[fs];
   const ga529Cap = (g.r529DeductionPerBeneficiary[fs] ?? 2000) * Math.max(0, kidsUnder17 + otherDependents);
@@ -97,7 +107,7 @@ export function calcTaxes(input, table = TAX) {
   const gaTax = gaTaxable * g.rate;
 
   /* ---- totals ---- */
-  const totalTax = fedIncomeTax + ficaEmployee + seTax + gaTax;
+  const totalTax = fedIncomeTax - refundableCredit + ficaEmployee + seTax + gaTax;
   const grossIncome = w2Gross + Math.max(0, sePro);
   const preTaxSaved = trad401k + solo401kEmployee + solo401kEmployer + hsa;
   const afterTaxSaved = roth401k;
@@ -113,7 +123,7 @@ export function calcTaxes(input, table = TAX) {
     grossIncome, w2Gross, sePro,
     section125, ficaWages, taxableW2,
     agi, deduction, qbi, taxableIncome,
-    grossFedTax, credits, fedIncomeTax,
+    grossFedTax, credits, fedIncomeTax, unusedCredits, refundableCredit,
     ssW2, medW2, addlMedicare, ficaEmployee,
     seNet, seSS, seMed, seTax, halfSE,
     gaTaxable, gaTax, ga529Ded, ga529Cap,

@@ -114,6 +114,16 @@ function renderRetire(s, c) {
 
   return `<div class="stack">${head}${mix}${gap}${settings}</div>`;
 }
+/** A window of months around the current plan start, for the start-month picker. */
+function monthOptions(current) {
+  const [y, m] = current.split('-').map(Number);
+  return Array.from({ length: 25 }, (_, i) => {
+    const d = new Date(y, m - 1 - 12 + i, 1);
+    const k = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
+    return [k, fullMonth(k)];
+  });
+}
+
 const fv = (monthly, ratePct, years) => {
   const r = ratePct / 100 / 12, n = years * 12;
   return r === 0 ? monthly * n : monthly * ((Math.pow(1 + r, n) - 1) / r);
@@ -164,6 +174,7 @@ function renderTaxes(s, c) {
       <h4>${esc(o.title)}${o.value ? ` <span class="chip g" style="margin-left:6px">${money(o.value)}/yr</span>` : ''}</h4>
       <div style="color:var(--text-2)">${esc(o.body)}</div></div>`).join('')}`);
 
+  const stubCard = renderStub(s, c);
   const maxed = maxedScenario(s);
   const compare = card(`${cardHead('If you maxed every tax-advantaged account')}
     <div class="grid-2">
@@ -182,7 +193,31 @@ function renderTaxes(s, c) {
   const assumptions = card(`${cardHead('Tax assumptions')}
     ${note('n', '', `Built on ${TAX.year} figures: ${money(TAX.federal.standardDeduction.mfj)} standard deduction, ${money(TAX.federal.childTaxCredit)} per child under 17, Georgia's ${pct(TAX.georgia.rate * 100, 2)} flat rate with a ${money(TAX.georgia.standardDeduction.mfj)} deduction and ${money(TAX.georgia.dependentExemption)} per dependent. Georgia's rate is scheduled to keep stepping down toward 4.99%. Verify against her actual W-2 and your Schedule C before you file, and use a CPA the first year you have real self-employment income.`)}`);
 
-  return `<div class="stack">${head}${rates}${compare}${detail}${sectionLabel('Advisor')}${opps}${assumptions}</div>`;
+  return `<div class="stack">${head}${rates}${stubCard}${compare}${detail}${sectionLabel('Advisor')}${opps}${assumptions}</div>`;
+}
+
+function renderStub(s, c) {
+  const st = c.stub;
+  if (!st?.isStub) return '';
+  const startName = fullMonth(s.meta.startMonth);
+  return card(`${cardHead(`${st.year} is a short year`, `<span class="chip b">${st.monthsOfW2} months of her pay</span>`)}
+    ${note('g', `You should get about ${money(st.expectedRefund)} back in early ${st.year + 1}`,
+      `Her salary only runs from ${startName}, so ${st.year} lands at ${money(st.stub.grossIncome)} of household income instead of ${money(c.snap.grossIncome)}. Payroll withholding does not know that. Every paycheck is taxed as if she earned ${money(c.snap.w2Gross)} all year, so she will overpay by roughly ${money(st.overWithheld)}, and ${money(st.stub.refundableCredit)} of unused child tax credit comes back on top of it.`)}
+    <div class="divider"></div>
+    <div class="kv"><span class="k">${st.year} household income</span><span class="v">${money(st.stub.grossIncome)}</span></div>
+    <div class="kv"><span class="k">Federal tax before credits</span><span class="v">${money(st.stub.grossFedTax)}</span></div>
+    <div class="kv"><span class="k">Child tax credits</span><span class="v pos">-${money(st.stub.credits)}</span></div>
+    <div class="kv"><span class="k">Federal income tax owed</span><span class="v">${money(st.stub.fedIncomeTax)}</span></div>
+    <div class="kv"><span class="k">Refundable credit coming back</span><span class="v pos">${money(st.stub.refundableCredit)}</span></div>
+    <div class="kv"><span class="k">Georgia tax</span><span class="v">${money(st.stub.gaTax)}</span></div>
+    <div class="kv"><span class="k">Payroll + self-employment tax</span><span class="v">${money(st.stub.ficaEmployee + st.stub.seTax)}</span></div>
+    <div class="kv total"><span class="k">Effective rate for ${st.year}</span><span class="v">${pct(st.stub.effectiveRate, 1)} <small class="mut" style="font-weight:500">vs ${pct(c.snap.tax.effectiveRate, 1)} at full speed</small></span></div>
+    <div class="btn-row"><button class="btn primary wide" data-add-stub-refund>Add ${money(st.expectedRefund)} to my ${st.year + 1} plan</button></div>
+    <div class="divider"></div>
+    ${fMoney(`Her W-2 income earlier in ${st.year}`, 'profile.priorW2ThisYear', s.profile.priorW2ThisYear || 0,
+      `This assumes she earned nothing else this year. If she had a job before this one, put the amount here and the refund estimate corrects itself.`)}
+    ${note('a', `Your eBay taxes are still due for the whole year`,
+      `The short year is her side only. You owe about ${money(st.seTaxDue)} on ${money(c.snap.sePro)} of eBay profit for ${st.year}, and nobody withheld a cent of it. The January 15 estimated payment is the one that matters.`)}`);
 }
 
 function maxedScenario(s) {
@@ -271,6 +306,8 @@ function renderSettings(s, c) {
   const profile = card(`${cardHead('Household')}
     ${fText('Household name', 'meta.householdName', s.meta.householdName)}
     ${fSelect('Filing status', 'profile.filingStatus', s.profile.filingStatus, [['mfj', 'Married filing jointly'], ['single', 'Single'], ['hoh', 'Head of household']])}
+    ${fSelect('Plan starts', 'meta.startMonth', s.meta.startMonth, monthOptions(s.meta.startMonth), 'Month one of the whole plan. Everything else counts forward from here.')}
+    ${fMoney('Her W-2 income earlier this year', 'profile.priorW2ThisYear', s.profile.priorW2ThisYear || 0, 'Only matters for the first partial year. Leave at 0 if the new job is her only income this year.')}
     ${fSelect('Theme', 'meta.theme', s.meta.theme, [['auto', 'Match my phone'], ['dark', 'Always dark'], ['light', 'Always light']])}
     <div class="section-label" style="margin-left:0">Kids</div>
     ${s.profile.dependents.map((d, i) => `<div class="inline-fields" style="margin-bottom:10px">
@@ -366,6 +403,17 @@ export function mount(el, s, c, rerender) {
       st.payroll.ga529Annual = 4000 * st.profile.dependents.length;
     });
     toast('Applied. Check the Budget tab.');
+  });
+
+  el.querySelector('[data-add-stub-refund]')?.addEventListener('click', () => {
+    const st = c.stub;
+    const month = `${st.year + 1}-04`;
+    setState((state) => {
+      const existing = state.events.find((e) => e.id === 'stub_refund');
+      const ev = { id: 'stub_refund', name: `${st.year} tax refund`, amount: Math.round(st.expectedRefund), month, direction: 'in', note: 'Over-withholding from her short first year' };
+      if (existing) Object.assign(existing, ev); else state.events.push(ev);
+    });
+    toast(`Added to April ${st.year + 1}`);
   });
 
   el.querySelectorAll('[data-slider]').forEach((n) => {

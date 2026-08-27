@@ -265,8 +265,9 @@ export function compute(state) {
       dadPaidMonth: sim.goals.find((g) => g.linkedDebtId === 'dad')?.doneMonth || null
     },
     retirement: { years: retireYears, projected: retirementAtTarget, safeIncome: retirementAtTarget * (state.assumptions.withdrawRate / 100) },
+    stub: stubYear(state),
     opportunities: findOpportunities(state, snap, exp),
-    alerts: findAlerts(state, snap, exp, monthlySurplus)
+    alerts: findAlerts(state, snap, exp, monthlySurplus, stubYear(state))
   };
 }
 
@@ -283,6 +284,51 @@ export function interestIfMinimumsOnly(state, months = 12) {
     }
   }
   return total;
+}
+
+/**
+ * The first calendar year of the plan is usually a stub: the new job starts part
+ * way through it, so the real tax bill is nothing like the steady-state one, and
+ * payroll withholding (which annualizes every paycheck) collects too much.
+ */
+export function stubYear(state) {
+  const start = state.meta.startMonth || todayKey();
+  const startMonthIdx = parseKey(start).getMonth();          // 0-11
+  const monthsOfW2 = 12 - startMonthIdx;
+  if (monthsOfW2 >= 12) return { isStub: false };
+
+  const full = yearSnapshot(state, 0);
+  const share = monthsOfW2 / 12;
+  const prior = state.profile.priorW2ThisYear || 0;
+
+  const stubInput = {
+    ...full.taxInput,
+    w2Gross: full.w2Gross * share + prior,
+    trad401k: full.taxInput.trad401k * share,
+    roth401k: full.taxInput.roth401k * share,
+    healthPremium: full.healthPremium * share,
+    otherPreTax: full.otherPreTax * share,
+    hsa: full.hsa * share
+  };
+  const stub = calcTaxes(stubInput);
+
+  /* Her employer withholds as if every paycheck ran all year, so income tax
+     withholding lands near the steady-state rate while FICA is always exact. */
+  const w2Share = full.grossIncome ? full.w2Gross / full.grossIncome : 1;
+  const fedWithheld = full.tax.fedIncomeTax * w2Share * share;
+  const gaWithheld = full.tax.gaTax * w2Share * share;
+  const stubW2Share = stub.grossIncome ? stub.w2Gross / stub.grossIncome : 1;
+  const fedOwedOnW2 = stub.fedIncomeTax * stubW2Share;
+  const gaOwedOnW2 = stub.gaTax * stubW2Share;
+  const overWithheld = Math.max(0, (fedWithheld - fedOwedOnW2) + (gaWithheld - gaOwedOnW2));
+
+  return {
+    isStub: true, year: parseKey(start).getFullYear(), monthsOfW2, priorW2: prior,
+    stub, full: full.tax,
+    fedWithheld, gaWithheld, overWithheld,
+    expectedRefund: overWithheld + stub.refundableCredit,
+    seTaxDue: stub.seTax + stub.fedIncomeTax * (1 - stubW2Share) + stub.gaTax * (1 - stubW2Share)
+  };
 }
 
 /** Home value, mortgage balance and everything that falls out of the two. */
@@ -359,8 +405,12 @@ function findOpportunities(state, snap, exp) {
   return out.sort((a, b) => (b.value || 0) - (a.value || 0));
 }
 
-function findAlerts(state, snap, exp, surplus) {
+function findAlerts(state, snap, exp, surplus, stub) {
   const out = [];
+  if (stub?.isStub && stub.expectedRefund > 500) {
+    out.push({ tone: 'g', title: `About ${fmt(stub.expectedRefund)} more coming back in ${stub.year + 1}`,
+      body: `Her salary only covers ${stub.monthsOfW2} months of ${stub.year}, but payroll withholds as if it ran all year. That overpayment comes back at filing. Do not spend it twice: it is a ${stub.year + 1} event, not a ${stub.year} one.` });
+  }
   const ef = state.accounts.find((a) => a.id === 'hysa')?.balance || 0;
   const months = exp.cashMonthly ? ef / exp.cashMonthly : 0;
   if (months < 1) out.push({ tone: 'r', title: 'No emergency fund yet', body: `You have ${months.toFixed(1)} months of expenses banked. Until that is at least 1, every surprise becomes debt.` });

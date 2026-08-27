@@ -63,9 +63,11 @@ browser data deletes it. Use **Plan → Settings → Export backup** every month
 ## A note on the numbers
 
 The tax engine implements 2026 federal brackets, the standard deduction, the
-child tax credit, the QBI deduction, Social Security and Medicare (including the
-self-employment version and the per-person wage base), and Georgia's flat income
-tax with dependent exemptions and the Path2College 529 deduction.
+child tax credit including the refundable portion, the QBI deduction, Social
+Security and Medicare (including the self-employment version and the per-person
+wage base), and Georgia's flat income tax with dependent exemptions and the
+Path2College 529 deduction. It also models the first partial year separately,
+since a job that starts mid-year is taxed nothing like a full one.
 
 It is a planning tool, not tax advice. Three inputs are estimates that should be
 replaced with real numbers as soon as they are known: the monthly health

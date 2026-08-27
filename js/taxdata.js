@@ -10,6 +10,9 @@ export const TAX = {
       hoh:    [[0,.10],[17700,.12],[67450,.22],[105700,.24],[201250,.32],[255650,.35],[640600,.37]]
     },
     childTaxCredit: 2200,
+    refundableCTCPerChild: 1700,
+    actcEarnedIncomeFloor: 2500,
+    actcRate: 0.15,
     otherDependentCredit: 500,
     ctcPhaseoutStart: { mfj: 400000, single: 200000, hoh: 200000 },
     qbiRate: 0.20,
