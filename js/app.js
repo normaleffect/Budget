@@ -19,11 +19,15 @@ const ICONS = {
 let current = 'home';
 const subtabState = { budget: 'overview', flow: '12', goals: 'goals', plan: 'forecast' };
 
-/* ---------- theme ---------- */
+/* ---------- theme ----------
+   Whatever host we are embedded in may have stamped its own data-theme on the
+   root element. "auto" means hand that stamp back, not wipe it. */
+const HOST_THEME = document.documentElement.getAttribute('data-theme');
 function applyTheme() {
   const t = getState().meta.theme;
-  if (t === 'auto') document.documentElement.removeAttribute('data-theme');
-  else document.documentElement.setAttribute('data-theme', t);
+  const want = t === 'auto' ? HOST_THEME : t;
+  if (want) document.documentElement.setAttribute('data-theme', want);
+  else document.documentElement.removeAttribute('data-theme');
 }
 
 /* ---------- render ----------
@@ -128,7 +132,8 @@ new MutationObserver(() => {
   if (!document.getElementById('sheet').hidden) wireInputs(b);
 }).observe(document.getElementById('sheet-body'), { childList: true });
 
-subscribe(() => { /* state saved; views re-render explicitly */ });
+/* any state write re-renders; the rAF debounce collapses this with explicit calls */
+subscribe(() => render());
 
 render();
 

@@ -70,3 +70,9 @@ tax with dependent exemptions and the Path2College 529 deduction.
 It is a planning tool, not tax advice. Two inputs are estimates that should be
 replaced with real numbers as soon as they are known: the monthly health
 insurance premium and the exact bonus structure.
+
+## Rebuilding the single-file version
+
+The app has no build step. If you ever want one standalone `.html` file to host
+somewhere else, `node tools/build-single-file.mjs dist/ledger.html` inlines
+everything (needs `npm i esbuild` first).

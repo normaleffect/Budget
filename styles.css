@@ -19,7 +19,7 @@
   --mono:ui-monospace,"SF Mono",Menlo,Consolas,monospace;
 }
 @media (prefers-color-scheme: light){
-  :root{
+  :root:not([data-theme="dark"]){
     --bg:#F4F6FA; --bg-elev:#FFFFFF; --surface:#FFFFFF; --surface-2:#F1F4F9; --surface-3:#E7ECF4;
     --border:#DFE5EE; --border-soft:#EBF0F6;
     --text:#0E1620; --text-2:#4C5C70; --text-3:#8493A6;
@@ -171,7 +171,7 @@ h1,h2,h3,h4,p{margin:0;}
 .btn:active{transform:scale(.975);}
 .btn.primary{background:var(--accent);color:#06120E;border-color:transparent;}
 html[data-theme="light"] .btn.primary, :root:not([data-theme]) .btn.primary{color:#fff;}
-@media (prefers-color-scheme: dark){:root:not([data-theme]) .btn.primary{color:#06120E;}}
+@media (prefers-color-scheme: dark){:root:not([data-theme="light"]) .btn.primary{color:#06120E;}}
 html[data-theme="dark"] .btn.primary{color:#06120E;}
 .btn.ghost{background:transparent;}
 .btn.danger{color:var(--red);border-color:color-mix(in srgb,var(--red) 30%,transparent);}

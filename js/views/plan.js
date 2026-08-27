@@ -308,8 +308,48 @@ function renderSettings(s, c) {
   return `<div class="stack">${profile}${assumptions}${data}${about}</div>`;
 }
 
+/* Sheet buttons live outside #view, so they are wired once at the document level. */
+let sheetWired = false;
+function wireSheetActions() {
+  if (sheetWired) return; sheetWired = true;
+  document.addEventListener('click', async (e) => {
+    const t = e.target.closest('button'); if (!t) return;
+    if (t.hasAttribute('data-copy-backup')) {
+      const ta = document.getElementById('backup-json');
+      try { await navigator.clipboard.writeText(ta.value); toast('Copied'); }
+      catch { ta.select(); document.execCommand('copy'); toast('Copied'); }
+    }
+    if (t.hasAttribute('data-download-backup')) {
+      try {
+        const blob = new Blob([document.getElementById('backup-json').value], { type: 'application/json' });
+        const a = document.createElement('a');
+        a.href = URL.createObjectURL(blob);
+        a.download = `ledger-backup-${new Date().toISOString().slice(0, 10)}.json`;
+        document.body.appendChild(a); a.click(); a.remove();
+        toast('Saved to your downloads');
+      } catch { toast('Downloads are blocked here — use Copy instead'); }
+    }
+    if (t.hasAttribute('data-do-restore')) {
+      const raw = document.getElementById('restore-json').value.trim();
+      if (!raw) return toast('Paste a backup first');
+      try { replaceState(JSON.parse(raw)); closeSheet(); toast('Restored'); }
+      catch { toast('That does not look like a backup'); }
+    }
+    if (t.hasAttribute('data-restore-file')) {
+      const inp = document.createElement('input');
+      inp.type = 'file'; inp.accept = 'application/json,.json';
+      inp.onchange = async () => {
+        try { replaceState(JSON.parse(await inp.files[0].text())); closeSheet(); toast('Restored'); }
+        catch { toast('Could not read that file'); }
+      };
+      inp.click();
+    }
+  });
+}
+
 /* ================= mount ================= */
 export function mount(el, s, c, rerender) {
+  wireSheetActions();
   el.querySelector('[data-apply-max]')?.addEventListener('click', () => {
     const L = TAX.federal.limits;
     const w2 = s.income.filter((i) => i.kind === 'w2').reduce((a, i) => a + i.annual, 0) || 1;
@@ -349,21 +389,19 @@ export function mount(el, s, c, rerender) {
   }));
 
   el.querySelector('[data-export]')?.addEventListener('click', () => {
-    const blob = new Blob([JSON.stringify(getState(), null, 2)], { type: 'application/json' });
-    const a = document.createElement('a');
-    a.href = URL.createObjectURL(blob);
-    a.download = `ledger-backup-${new Date().toISOString().slice(0, 10)}.json`;
-    a.click();
-    toast('Backup downloaded');
+    const json = JSON.stringify(getState(), null, 2);
+    openSheet('Backup', `
+      <div class="tiny" style="margin-bottom:10px">Copy this somewhere safe — a note to yourself, an email, anywhere. Pasting it back into Restore rebuilds every number exactly as it is right now.</div>
+      <textarea id="backup-json" readonly rows="9" style="font-family:var(--mono);font-size:11px;line-height:1.4">${esc(json)}</textarea>
+      <div class="btn-row"><button class="btn primary wide" data-copy-backup>Copy to clipboard</button></div>
+      <div class="btn-row"><button class="btn wide" data-download-backup>Save as a file</button></div>`);
   });
   el.querySelector('[data-import]')?.addEventListener('click', () => {
-    const inp = document.createElement('input');
-    inp.type = 'file'; inp.accept = 'application/json';
-    inp.onchange = async () => {
-      try { replaceState(JSON.parse(await inp.files[0].text())); toast('Restored'); }
-      catch { toast('Could not read that file'); }
-    };
-    inp.click();
+    openSheet('Restore', `
+      <div class="tiny" style="margin-bottom:10px">Paste a backup below and hit Restore. This replaces everything currently in the app.</div>
+      <textarea id="restore-json" rows="9" placeholder="Paste your backup here" style="font-family:var(--mono);font-size:11px;line-height:1.4"></textarea>
+      <div class="btn-row"><button class="btn primary wide" data-do-restore>Restore</button></div>
+      <div class="btn-row"><button class="btn wide" data-restore-file>Pick a backup file instead</button></div>`);
   });
   el.querySelector('[data-reset]')?.addEventListener('click', () => {
     if (confirm('Reset every number back to the starting plan? This cannot be undone.')) { resetState(); toast('Reset'); }
