@@ -136,11 +136,12 @@ export function simulate(state, months = 300) {
     for (const ev of eventsByMonth[key] || []) { if (ev.direction === 'in') evIn += ev.amount; else evOut += ev.amount; }
 
     /* --- debt interest + minimums --- */
-    let minPayments = 0, interestPaid = 0;
+    let minPayments = 0, interestPaid = 0, interestPaidConsumer = 0;
     for (const d of debts) {
       if (d.balance <= 0) continue;
       const int = d.balance * (d.apr / 100 / 12);
       interestPaid += int;
+      if (!d.excludeFromPayoff) interestPaidConsumer += int;
       d.balance += int;
       if (d.excludeFromPayoff) {
         const pi = d.piPayment || 0;
@@ -204,7 +205,7 @@ export function simulate(state, months = 300) {
 
     rows.push({
       key, monthIndex: m, gross, w2Month, seMonth, taxes, deferral, match, solo, hsa, health, rothIra,
-      takeHome, cashExpenses, minPayments, interestPaid, evIn, evOut,
+      takeHome, cashExpenses, minPayments, interestPaid, interestPaidConsumer, evIn, evOut,
       surplus: takeHome + evIn - cashExpenses - minPayments - evOut,
       allocations,
       cash: accounts.checking.balance + accounts.hysa.balance + accounts.sink.balance,
@@ -251,7 +252,7 @@ export function compute(state) {
       netWorth: sum(state.accounts, (x) => x.balance) - sum(state.debts, (d) => d.balance),
       assets: sum(state.accounts, (x) => x.balance),
       liabilities: sum(state.debts, (d) => d.balance),
-      nonMortgageDebt, efTarget,
+      nonMortgageDebt, efTarget, ...homeStats(state),
       monthlyTotalSpend: exp.totalMonthly,
       efNow: (state.accounts.find((x) => x.id === 'hysa')?.balance) || 0,
       savingsRate,
@@ -266,6 +267,45 @@ export function compute(state) {
     retirement: { years: retireYears, projected: retirementAtTarget, safeIncome: retirementAtTarget * (state.assumptions.withdrawRate / 100) },
     opportunities: findOpportunities(state, snap, exp),
     alerts: findAlerts(state, snap, exp, monthlySurplus)
+  };
+}
+
+/** Interest you would hand over on non-mortgage debt if you only ever paid the minimums. */
+export function interestIfMinimumsOnly(state, months = 12) {
+  let total = 0;
+  const debts = state.debts.filter((d) => !d.excludeFromPayoff).map((d) => ({ ...d }));
+  for (let m = 0; m < months; m++) {
+    for (const d of debts) {
+      if (d.balance <= 0) continue;
+      const int = d.balance * (d.apr / 100 / 12);
+      total += int;
+      d.balance = Math.max(0, d.balance + int - (d.minPayment || 0));
+    }
+  }
+  return total;
+}
+
+/** Home value, mortgage balance and everything that falls out of the two. */
+export function homeStats(state) {
+  const home = state.accounts.find((a) => a.id === 'home');
+  const mtg = state.debts.find((d) => d.excludeFromPayoff);
+  const homeValue = home?.balance || 0;
+  const mortgageBalance = mtg?.balance || 0;
+  const equity = homeValue - mortgageBalance;
+  const payment = state.expenses.find((e) => e.id === (mtg?.paidByExpenseId || 'mortgage'))?.monthly || 0;
+  const pi = mtg?.piPayment || 0;
+  return {
+    homeValue, mortgageBalance, equity,
+    homeEquityPct: homeValue ? (equity / homeValue) * 100 : 0,
+    ltv: homeValue ? (mortgageBalance / homeValue) * 100 : 0,
+    purchasePrice: home?.purchasePrice || 0,
+    purchaseYear: home?.purchaseYear || 0,
+    appreciation: homeValue - (home?.purchasePrice || 0),
+    mortgageRate: mtg?.apr || 0,
+    mortgagePayment: payment,
+    mortgagePI: pi,
+    mortgageEscrow: Math.max(0, payment - pi),
+    mortgageInterestYear: mortgageBalance * ((mtg?.apr || 0) / 100)
   };
 }
 

@@ -67,9 +67,10 @@ child tax credit, the QBI deduction, Social Security and Medicare (including the
 self-employment version and the per-person wage base), and Georgia's flat income
 tax with dependent exemptions and the Path2College 529 deduction.
 
-It is a planning tool, not tax advice. Two inputs are estimates that should be
+It is a planning tool, not tax advice. Three inputs are estimates that should be
 replaced with real numbers as soon as they are known: the monthly health
-insurance premium and the exact bonus structure.
+insurance premium, the exact bonus structure, and the principal-and-interest
+portion of the mortgage payment (currently derived, not read off a statement).
 
 ## Rebuilding the single-file version
 

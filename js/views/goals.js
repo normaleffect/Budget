@@ -2,6 +2,7 @@ import { money, pct, esc, fullMonth, uid, labelMonth } from '../format.js';
 import { card, cardHead, stat, note, chip, row, ring, sectionLabel, progress, fMoney, fText, fSelect, fNum, fSwitch, openSheet, barChart } from '../ui.js';
 import { setState } from '../state.js';
 import { goalCurrent } from './home.js';
+import { interestIfMinimumsOnly } from '../engine.js';
 
 export const title = 'Goals & Debt';
 export const subtabs = [['goals', 'Goals'], ['debts', 'Debt'], ['accounts', 'Accounts']];
@@ -78,33 +79,52 @@ function renderDebts(s, c) {
       <div class="pill-ico" style="background:var(--${tone}-dim);color:var(--${tone})">${i + 1}</div>
       <div class="grow"><div class="r-title">${esc(d.name)}</div>
         <div class="r-sub">${pct(d.apr, 2)} APR · ${money(d.minPayment)}/mo minimum${off ? ` · gone ${fullMonth(off)}` : ''}</div>
-        ${progress(0, 1, tone)}</div>
-      <div class="r-val num">${money(d.balance)}<small>${money(d.balance * d.apr / 100 / 12)}/mo interest</small></div></div>`;
+      </div>
+      <div class="r-val num">${money(d.balance)}<small>${d.apr ? `${money(d.balance * d.apr / 100 / 12)}/mo interest` : 'no interest'}</small></div></div>`;
   }).join('');
 
   const strategy = card(`${cardHead('Payoff strategy')}
     ${fSelect('Method', 'assumptions.payoffMethod', s.assumptions.payoffMethod, [['avalanche', 'Avalanche — highest rate first (cheapest)'], ['snowball', 'Snowball — smallest balance first (fastest wins)']], 'Your goal priorities on the Goals tab actually control the order. This sets the tie-break.')}
     ${note('g', 'Why the 22.9% debt goes first', `Paying it off is a guaranteed, tax-free 22.9% return. The stock market has averaged about 10% before tax. There is no investment on earth that reliably beats retiring that balance, and it is costing you ${money((s.debts.find((d) => d.id === 'misc')?.balance || 0) * 0.229 / 12)} a month just to exist.`)}`);
 
-  const mtgCard = card(`${cardHead('Mortgage')}
-    ${row({ icon: '🏠', iconBg: 'var(--blue-dim)', title: 'Home loan', sub: mortgage?.balance ? `${pct(mortgage.apr, 2)} APR` : 'Add your balance and rate to track home equity', value: money(mortgage?.balance || 0) })}
-    ${row({ icon: '💵', iconBg: 'var(--surface-2)', title: 'Payment', sub: 'Principal, interest, taxes and insurance', value: money(s.expenses.find((e) => e.id === 'mortgage')?.monthly || 0), valueSub: 'per month' })}
-    <div class="btn-row"><button class="btn wide" data-edit-debt="${mortgage?.id || ''}">Enter mortgage details</button></div>
-    <div class="tiny" style="margin-top:10px">Do not rush this one. At a normal mortgage rate, every extra dollar aimed here earns you the mortgage rate risk-free, while the same dollar in her 401(k) gets an instant ${pct(c.snap.tax.savingsPerPreTaxDollar, 0)} tax break plus decades of growth. Fill the retirement accounts first, then decide.</div>`);
+  const n = c.now;
+  const spread = (s.assumptions.investReturn || 7) - n.mortgageRate;
+  const realRate = n.mortgageRate - (s.assumptions.inflation || 2.5);
+  const mtgCard = card(`${cardHead('Mortgage', `<span class="chip g">${pct(n.mortgageRate, 2)} locked</span>`)}
+    <div class="grid-2" style="margin-bottom:12px">
+      ${stat('Owed', money(n.mortgageBalance), `${pct(n.ltv, 0)} of value`)}
+      ${stat('Equity', `<span class="pos">${money(n.equity)}</span>`, `${pct(n.homeEquityPct, 0)} of the house`)}
+    </div>
+    <div class="kv"><span class="k">Total payment</span><span class="v">${money(n.mortgagePayment)}/mo</span></div>
+    <div class="kv"><span class="k">Principal and interest</span><span class="v">${money(n.mortgagePI)}/mo</span></div>
+    <div class="kv"><span class="k">Taxes, insurance, escrow</span><span class="v">${money(n.mortgageEscrow)}/mo</span></div>
+    <div class="kv"><span class="k">Interest this year</span><span class="v">${money(n.mortgageInterestYear)}</span></div>
+    <div class="btn-row"><button class="btn wide" data-edit-debt="${mortgage?.id || ''}">Edit mortgage</button></div>`);
 
-  const totalInterest = card(`${cardHead('What debt is costing you')}
+  const mtgAdvice = card(`${cardHead('Do not pay this off early')}
+    ${note('g', `${pct(n.mortgageRate, 2)} is cheaper than money itself`,
+      `With inflation running around ${pct(s.assumptions.inflation, 1)}, your real cost of borrowing is ${pct(realRate, 2)}. The debt gets cheaper every year you hold it. A rate like this is not available again in your lifetime and it is attached to a house you are not selling.`)}
+    ${note('b', `Every dollar sent here loses you about ${pct(spread, 2)} a year`,
+      `A dollar of extra principal earns you exactly ${pct(n.mortgageRate, 2)}. The same dollar in her 401(k) gets an immediate ${pct(c.snap.tax.savingsPerPreTaxDollar, 0)} tax break and then compounds at an assumed ${pct(s.assumptions.investReturn, 1)}. Over the ${(s.profile.retireAge - s.profile.ages.you)} years to retirement that gap is not close.`)}
+    ${n.mortgageEscrow > 700 ? note('a', `${money(n.mortgageEscrow)}/mo is not principal and interest`,
+      `That covers taxes and insurance, but at ${pct(n.ltv, 0)} loan to value you are well past the point where mortgage insurance is required. If any part of that escrow is PMI, call the servicer and have it removed. On a conventional loan they must drop it at 78% and will usually drop it on request at 80%. You are at ${pct(n.ltv, 0)}.`) : ''}
+    ${note('v', 'What the equity is actually for',
+      `${money(n.equity)} of equity is real net worth, but it is illiquid and you cannot eat it. Do not borrow against it for anything that is not an emergency, and do not count it as your retirement plan. Its job is to sit there, grow quietly, and be the reason you have somewhere cheap to live for the next 20 years.`)}`);
+
+  const lazyInterest = interestIfMinimumsOnly(s, 12);
+  const planInterest = c.sim.rows.slice(0, 12).reduce((a, r) => a + (r.interestPaidConsumer || 0), 0);
+  const totalInterest = card(`${cardHead('What this debt costs you')}
     <div class="grid-2">
-      ${stat('This year', money(monthlyInterest * 12), 'interest if nothing changes')}
-      ${stat('Under the plan', money(estimateInterest(c)), 'because you kill it fast')}
-    </div>`);
+      ${stat('Minimums only', money(lazyInterest), 'interest over 12 months')}
+      ${stat('Under this plan', `<span class="pos">${money(planInterest)}</span>`, 'because you kill it fast')}
+    </div>
+    <div class="tiny" style="margin-top:10px">Attacking it instead of drifting saves you ${money(Math.max(0, lazyInterest - planInterest))} in the next year alone, and that is before the freed-up ${money(minDebtTotal(s))} a month starts compounding somewhere useful.</div>`);
 
-  return `<div class="stack">${head}${card(list || '<div class="empty">No debt. Outstanding.</div>')}${totalInterest}${strategy}${mtgCard}
+  return `<div class="stack">${head}${card(list || '<div class="empty">No debt. Outstanding.</div>')}${totalInterest}${strategy}${sectionLabel('The house')}${mtgCard}${mtgAdvice}
     ${card(`<button class="btn wide" data-add-debt>+ Add a debt</button>`)}</div>`;
 }
 
-function estimateInterest(c) {
-  return c.sim.rows.slice(0, 12).reduce((a, r) => a + (r.interestPaid || 0), 0);
-}
+const minDebtTotal = (s) => s.debts.filter((d) => !d.excludeFromPayoff && d.balance > 0).reduce((a, d) => a + (d.minPayment || 0), 0);
 
 /* ================= ACCOUNTS ================= */
 function renderAccounts(s, c) {
@@ -114,9 +134,11 @@ function renderAccounts(s, c) {
 
   const nw = card(`${cardHead('Net worth today')}
     <div class="hero-value num" style="font-size:34px">${money(c.now.netWorth)}</div>
-    <div class="hero-sub">${chip('g', `${money(c.now.assets)} assets`)} ${chip('r', `${money(c.now.liabilities)} debts`)}</div>
+    <div class="hero-sub">${chip('g', `${money(c.now.assets)} assets`)} ${chip('r', `${money(c.now.liabilities)} owed`)}</div>
     <div class="divider"></div>
     <div class="tiny">In 12 months this plan puts you at ${money(c.sim.rows[11].netWorth)}. In 5 years, ${money(c.sim.rows[59].netWorth)}.</div>`);
+
+  const eq = homeEquityCard(s, c);
 
   const cards = Object.entries(groups).filter(([k]) => byKind[k]?.length).map(([kind, label]) => card(`
     ${cardHead(label, `<span class="num mut" style="font-size:13px;font-weight:650">${money(byKind[kind].reduce((a, x) => a + x.balance, 0))}</span>`)}
@@ -124,9 +146,36 @@ function renderAccounts(s, c) {
       <div class="grow"><div class="r-title">${esc(a.name)}</div><div class="r-sub">${a.apy ? `${pct(a.apy, 1)} assumed growth` : ''}${a.note ? ` · ${esc(a.note)}` : ''}</div></div>
       <div class="r-val num">${money(a.balance)}</div></div>`).join('')}`)).join('');
 
-  return `<div class="stack">${nw}${cards}
+  return `<div class="stack">${nw}${eq}${cards}
     ${note('b', 'Keep these honest', 'Update balances once a month, on the same day. That single habit does more for your finances than any app feature. It takes four minutes and it is the difference between a plan and a wish.')}
     ${card(`<button class="btn wide" data-add-account>+ Add an account</button>`)}</div>`;
+}
+
+function homeEquityCard(s, c) {
+  const n = c.now;
+  if (!n.homeValue) return '';
+  const payoff = c.sim.rows.find((r) => (r.debts.mtg ?? 0) < 1);
+  const yearsLeft = payoff ? (payoff.monthIndex / 12) : null;
+  const held = n.purchaseYear ? new Date().getFullYear() - n.purchaseYear : 0;
+  const gainPct = n.purchasePrice ? (n.appreciation / n.purchasePrice) * 100 : 0;
+
+  return card(`${cardHead('Home equity', `<span class="mut" style="font-size:12px">${pct(n.homeEquityPct, 0)} of the house is yours</span>`)}
+    <div class="hero-value num" style="font-size:34px;color:var(--green)">${money(n.equity)}</div>
+    <div class="hero-sub">${chip('g', `${money(n.appreciation, { sign: true })} since ${n.purchaseYear || 'purchase'}`)} ${chip('n', `${pct(n.ltv, 0)} loan to value`)}</div>
+    <div style="margin-top:14px">
+      <div class="bar" style="height:12px">
+        <i style="width:${Math.min(100, n.homeEquityPct)}%;background:var(--green)"></i>
+        <i style="width:${Math.min(100, n.ltv)}%;background:var(--surface-3)"></i>
+      </div>
+      <div class="legend"><span><i style="background:var(--green)"></i>Your equity ${money(n.equity)}</span><span><i style="background:var(--surface-3)"></i>Still owed ${money(n.mortgageBalance)}</span></div>
+    </div>
+    <div class="divider"></div>
+    <div class="kv"><span class="k">What the lender says it is worth</span><span class="v">${money(n.homeValue)}</span></div>
+    <div class="kv"><span class="k">What you paid${held ? ` (${held} years ago)` : ''}</span><span class="v">${money(n.purchasePrice)}</span></div>
+    <div class="kv"><span class="k">Appreciation</span><span class="v pos">${money(n.appreciation, { sign: true })} (${pct(gainPct, 0)})</span></div>
+    <div class="kv"><span class="k">Mortgage balance at ${pct(n.mortgageRate, 2)}</span><span class="v">${money(n.mortgageBalance)}</span></div>
+    <div class="kv total"><span class="k">Equity</span><span class="v pos">${money(n.equity)}</span></div>
+    ${yearsLeft !== null ? `<div class="tiny" style="margin-top:9px">At ${money(n.mortgagePI)}/mo of principal and interest the loan clears in about ${yearsLeft.toFixed(0)} years, and the equity line above keeps climbing the whole time from both directions: the balance falling and the value rising.</div>` : ''}`);
 }
 
 /* ================= mount ================= */

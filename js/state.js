@@ -71,7 +71,7 @@ export function makeDefaultState() {
       { id: 'misc',  name: 'Misc debts (cards etc.)', balance: 5000, apr: 22.9, minPayment: 150, kind: 'card',     openedNote: 'Estimate - split between the two of you' },
       { id: 'truck', name: 'Truck loan',              balance: 4000, apr: 7.5,  minPayment: 500, kind: 'auto',     openedNote: '~8 payments left' },
       { id: 'dad',   name: 'Owed to Dad',             balance: 3000, apr: 0,    minPayment: 0,   kind: 'family',   openedNote: 'He floated us $2,700. Paying back $3,000.', payoffFirst: true },
-      { id: 'mtg',   name: 'Mortgage',                balance: 0,    apr: 6.5,  minPayment: 0,   kind: 'mortgage', excludeFromPayoff: true, paidByExpenseId: 'mortgage', openedNote: 'Add your balance + P&I to track home equity' }
+      { id: 'mtg',   name: 'Mortgage',                balance: 291000, apr: 2.25, minPayment: 0, kind: 'mortgage', excludeFromPayoff: true, paidByExpenseId: 'mortgage', piPayment: 1216, openedNote: 'Locked at 2.25%. Never selling, never prepaying.' }
     ],
 
     /* ---------------- accounts / net worth ---------------- */
@@ -84,7 +84,7 @@ export function makeDefaultState() {
       { id: 'rothira',  name: 'Roth IRAs',       kind: 'retirement', balance: 0, apy: 7.0,  note: 'Not open yet' },
       { id: 'r529',     name: '529 Plans',       kind: 'education',  balance: 0, apy: 6.0,  note: 'Georgia Path2College' },
       { id: 'broker',   name: 'Brokerage',       kind: 'invest',     balance: 0, apy: 7.0,  note: 'Where the leftover surplus lands' },
-      { id: 'home',     name: 'Home value',      kind: 'property',   balance: 0, apy: 3.0,  note: 'Add your estimate' }
+      { id: 'home',     name: 'Home value',      kind: 'property',   balance: 550000, apy: 3.0, purchasePrice: 335000, purchaseYear: 2020, note: 'Lender valuation' }
     ],
 
     /* ---------------- goals ---------------- */

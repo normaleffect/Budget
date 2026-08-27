@@ -22,6 +22,11 @@ export function render(s, c) {
         ${chip(nw12 >= n.netWorth ? 'g' : 'r', `${money(nw12 - n.netWorth, { sign: true, compact: true })} projected in 12 months`)}
         <span class="mut">→ ${money(nw12, { compact: true })}</span>
       </div>
+      <div class="hero-sub" style="margin-top:6px">
+        ${chip('n', `${money(n.assets, { compact: true })} owned`)}
+        ${chip('n', `${money(n.liabilities, { compact: true })} owed`)}
+        ${n.equity ? chip('g', `${money(n.equity, { compact: true })} home equity`) : ''}
+      </div>
       <div style="margin-top:14px">${lineChart([{ data: nwSeries, color: 'green' }], { height: 92, labels: rows12.map((r, i) => (i === 0 || i === 11 || i === 6) ? labelMonth(r.key) : ''), formatY: (v) => money(v, { compact: true }) })}</div>
     </div>`;
 
@@ -58,11 +63,14 @@ export function render(s, c) {
     </div>${tracked}`);
 
   /* ---- key numbers ---- */
+  const invested = s.accounts.filter((a) => ['retirement', 'invest', 'education'].includes(a.kind)).reduce((a, x) => a + x.balance, 0);
   const keyStats = `<div class="grid-2">
     ${stat('Savings rate', pct(n.savingsRate, 0), 'income kept, not spent')}
     ${stat('Effective tax', pct(n.effectiveRate, 1), `${money(c.snap.tax.totalTax)} this year`)}
     ${stat('Emergency fund', money(n.efNow), `of ${money(n.efTarget)} target`)}
     ${stat('Non-mortgage debt', `<span class="${n.nonMortgageDebt > 0 ? 'neg' : 'pos'}">${money(n.nonMortgageDebt)}</span>`, c.milestones.debtFreeMonth ? `clear by ${fullMonth(c.milestones.debtFreeMonth)}` : 'all clear')}
+    ${stat('Home equity', `<span class="pos">${money(n.equity)}</span>`, `${pct(n.homeEquityPct, 0)} of ${money(n.homeValue, { compact: true })}`)}
+    ${stat('Invested', money(invested), invested ? 'working for you' : 'nothing yet, this is the gap')}
   </div>`;
 
   /* ---- goal rings ---- */
