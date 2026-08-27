@@ -9,7 +9,7 @@ const nextDec = (() => {
 
 export function makeDefaultState() {
   return {
-    meta: { version: 3, householdName: 'Our Household', createdAt: new Date().toISOString(), startMonth: START, theme: 'auto' },
+    meta: { version: 4, householdName: 'Our Household', createdAt: new Date().toISOString(), startMonth: START, theme: 'auto' },
 
     profile: {
       filingStatus: 'mfj',
@@ -130,6 +130,25 @@ export function makeDefaultState() {
 
 /* ---------------- store ---------------- */
 const KEY = 'ledger.state.v3';
+const SCHEMA_VERSION = 4;
+
+/* Saved data wins over defaults, so a new seeded number never reaches someone who
+   already opened the app. Migrations fill in the gap without touching real edits. */
+const MIGRATIONS = {
+  4: (st) => {
+    const home = st.accounts.find((a) => a.id === 'home');
+    if (home && !home.balance) Object.assign(home, { balance: 550000, purchasePrice: 335000, purchaseYear: 2020, note: 'Lender valuation' });
+    const mtg = st.debts.find((d) => d.id === 'mtg');
+    if (mtg && !mtg.balance) Object.assign(mtg, { balance: 291000, apr: 2.25, piPayment: 1216, openedNote: 'Locked at 2.25%. Never selling, never prepaying.' });
+  }
+};
+
+function migrate(st) {
+  const from = st.meta?.version || 0;
+  for (let v = from + 1; v <= SCHEMA_VERSION; v++) MIGRATIONS[v]?.(st);
+  if (st.meta) st.meta.version = SCHEMA_VERSION;
+  return st;
+}
 let state = load();
 const listeners = new Set();
 
@@ -138,7 +157,9 @@ function load() {
     const raw = localStorage.getItem(KEY);
     if (!raw) return makeDefaultState();
     const parsed = JSON.parse(raw);
-    return merge(makeDefaultState(), parsed);
+    const next = migrate(merge(makeDefaultState(), parsed));
+    try { localStorage.setItem(KEY, JSON.stringify(next)); } catch {}
+    return next;
   } catch { return makeDefaultState(); }
 }
 function merge(base, over) {
@@ -159,7 +180,7 @@ export function setState(mutator, { silent = false } = {}) {
 }
 export function subscribe(fn) { listeners.add(fn); return () => listeners.delete(fn); }
 export function resetState() { localStorage.removeItem(KEY); state = makeDefaultState(); listeners.forEach((f) => f(state)); }
-export function replaceState(next) { state = merge(makeDefaultState(), next); setState(() => {}); }
+export function replaceState(next) { state = migrate(merge(makeDefaultState(), next)); setState(() => {}); }
 
 /** dotted-path setter used by every input in the app */
 export function setPath(path, value) {
